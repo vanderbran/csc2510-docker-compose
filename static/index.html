@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Docker Compose Node App</title>
+  <title>Developer Meme Break</title>
   <style>
     body {
       margin: 0;
@@ -17,6 +17,7 @@
     }
 
     .page {
+      box-sizing: border-box;
       text-align: center;
       padding: 2rem;
       max-width: 700px;
@@ -60,18 +61,151 @@
       font-size: 0.95rem;
       opacity: 0.85;
     }
+
+    button { border: 0; font: inherit; cursor: pointer; }
+    .button:focus-visible { outline: 3px solid #ffd166; outline-offset: 5px; }
+    .meme {
+      margin: 2rem 0;
+      padding: 2rem 1rem;
+      border: 2px solid rgba(255, 255, 255, 0.25);
+      border-radius: 16px;
+      background: #111827;
+    }
+    .meme p { margin: 0; font-size: 1.4rem; font-weight: 700; }
+    .meme .reaction { font-size: 4rem; margin: 1rem 0; }
+    .meme .punchline { color: #ffd166; }
+    .meme img { display: block; max-width: 100%; max-height: 65vh; margin: 1rem auto; object-fit: contain; border-radius: 8px; }
+    .meme img[hidden], [hidden] { display: none; }
+    .meme a { color: #ffd166; }
+    .button:disabled { cursor: wait; opacity: 0.65; }
+    .api a { color: #ffffff; }
+    @media (max-width: 480px) {
+      .page { padding: 1.5rem; }
+      h1 { font-size: 2.2rem; }
+    }
   </style>
 </head>
 <body>
   <div class="page">
-    <h1>Welcome to the Docker Node App</h1>
-    <p>
-      This page is served by Express and includes integrated CSS for a polished single-page experience.
-    </p>
-    <a class="button" href="/api/data">View API Response</a>
+    <h1>Developer Meme Break</h1>
+    <p>A fresh dose of developer humor on every refresh.</p>
+    <div class="meme" aria-live="polite" aria-atomic="true">
+      <p id="setup">It works on my machine.</p>
+      <div class="reaction" id="reaction" aria-hidden="true">🐳 📦</div>
+      <p class="punchline" id="punchline">Then we’ll ship your machine.</p>
+      <img id="meme-image" alt="" hidden referrerpolicy="no-referrer" />
+      <a id="meme-source" target="_blank" rel="noopener noreferrer" hidden>View original post</a>
+    </div>
+    <p id="meme-status" role="status"></p>
+    <button class="button" id="next-meme" type="button">Next meme ↻</button>
+    <noscript><p>Enable JavaScript for a different meme on each refresh.</p></noscript>
     <div class="api">
-      Try the API endpoint at <code>/api/data</code> for JSON output.
+      Still here for the data? <a href="/api/data">View API response</a>
     </div>
   </div>
+  <script>
+    const memes = [
+      ['It works on my machine.', '🐳 📦', 'Then we’ll ship your machine.'],
+      ['99 little bugs in the code. Take one down, patch it around…', '🐛 🐛', '127 little bugs in the code.'],
+      ['Me: I’ll just fix this one thing before bed.', '🧑‍💻 🌅', 'The birds: good morning.'],
+      ['When you delete a console.log and the app stops working.', '😐 🔥', 'That was a load-bearing console.log.'],
+      ['CSS: move this element 2 pixels to the left.', '🎨 💥', 'The footer now lives in another dimension.'],
+      ['My code passed all the tests.', '😎 🧪', 'All zero of them.'],
+      ['Git: please enter a commit message.', '📝 😵', 'Me: how do I leave this editor?'],
+      ['Documentation: this should be straightforward.', '📚 🫠', 'Three tabs, two coffees, and a complete rewrite later…'],
+      ['The bug disappears when I share my screen.', '🐛 🪄', 'Finally, a deployment strategy.'],
+      ['Me naming a variable:', '🤔 💡', 'data. data2. actualData. finalActualData.'],
+      ['Docker build: using cache.', '🐳 ⚡', 'Me: I have never trusted anything more.'],
+      ['Temporary fix. TODO: clean this up later.', '🩹 🦕', 'Last modified: six developers ago.']
+    ];
+
+    let previous = -1;
+    try {
+      const saved = sessionStorage.getItem('developer-meme-index');
+      if (saved !== null) previous = Number(saved);
+    } catch { /* Memes still work when browser storage is unavailable. */ }
+
+    function showMeme() {
+      const choices = memes.map((_, index) => index).filter(index => index !== previous);
+      previous = choices[Math.floor(Math.random() * choices.length)];
+      const [setup, reaction, punchline] = memes[previous];
+      document.getElementById('setup').textContent = setup;
+      document.getElementById('reaction').textContent = reaction;
+      document.getElementById('punchline').textContent = punchline;
+      try {
+        sessionStorage.setItem('developer-meme-index', String(previous));
+      } catch { /* Keep the page usable with storage disabled. */ }
+    }
+
+    const button = document.getElementById('next-meme');
+    const status = document.getElementById('meme-status');
+    const image = document.getElementById('meme-image');
+    const source = document.getElementById('meme-source');
+    let lastPost = '';
+    try { lastPost = sessionStorage.getItem('developer-meme-post') || ''; } catch {}
+
+    function allowedUrl(value, hosts) {
+      try {
+        const url = new URL(value);
+        return url.protocol === 'https:' && hosts.includes(url.hostname);
+      } catch { return false; }
+    }
+
+    async function loadMeme() {
+      button.disabled = true;
+      status.textContent = 'Finding a developer meme…';
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12000);
+      try {
+        const response = await fetch('https://meme-api.com/gimme/ProgrammerHumor/5', {
+          signal: controller.signal,
+          cache: 'no-store'
+        });
+        if (!response.ok) throw new Error('Meme API unavailable');
+        const data = await response.json();
+        const candidates = (Array.isArray(data.memes) ? data.memes : []).filter(meme =>
+          !meme.nsfw && !meme.spoiler && meme.postLink !== lastPost &&
+          typeof meme.title === 'string' &&
+          allowedUrl(meme.url, ['i.redd.it', 'preview.redd.it', 'i.imgur.com']) &&
+          allowedUrl(meme.postLink, ['reddit.com', 'www.reddit.com', 'redd.it'])
+        );
+        if (!candidates.length) throw new Error('No new memes available');
+        const meme = candidates[Math.floor(Math.random() * candidates.length)];
+        await new Promise((resolve, reject) => {
+          const preview = new Image();
+          const imageTimeout = setTimeout(() => reject(new Error('Image timed out')), 10000);
+          preview.referrerPolicy = 'no-referrer';
+          preview.onload = () => { clearTimeout(imageTimeout); resolve(); };
+          preview.onerror = () => { clearTimeout(imageTimeout); reject(new Error('Image unavailable')); };
+          preview.src = meme.url;
+        });
+        document.getElementById('setup').textContent = meme.title;
+        document.getElementById('reaction').hidden = true;
+        document.getElementById('punchline').hidden = true;
+        image.src = meme.url;
+        image.alt = meme.title;
+        image.hidden = false;
+        source.href = meme.postLink;
+        source.textContent = `r/ProgrammerHumor · u/${meme.author || 'unknown'} · Original post`;
+        source.hidden = false;
+        lastPost = meme.postLink;
+        try { sessionStorage.setItem('developer-meme-post', lastPost); } catch {}
+        status.textContent = 'Fresh from r/ProgrammerHumor.';
+      } catch {
+        image.hidden = true;
+        source.hidden = true;
+        document.getElementById('reaction').hidden = false;
+        document.getElementById('punchline').hidden = false;
+        showMeme();
+        status.textContent = 'Couldn’t load an internet meme. Here’s a local one — try again!';
+      } finally {
+        clearTimeout(timeout);
+        button.disabled = false;
+      }
+    }
+
+    button.addEventListener('click', loadMeme);
+    loadMeme();
+  </script>
 </body>
 </html>
